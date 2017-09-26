@@ -5,12 +5,15 @@ import Data.MemoTrie (memo3)
 -- $setup
 -- >>>:set -XGeneralizedNewtypeDeriving
 -- >>> import Test.QuickCheck
--- >>> import Control.Monad
+-- >>> import Control.Applicative
 -- >>> import Control.Arrow
 --
--- >>> newtype TInt = TInt {getInt :: Int} deriving (Eq, Ord, Show, Num, Integral, Real, Enum)
---
--- >>> instance Arbitrary TInt where arbitrary = liftM TInt (choose (1, 30) :: Gen Int) 
+-- >>> newtype Small = Small Int deriving Show
+-- >>> newtype Positive = Positive Int deriving Show
+-- >>> newtype NonNegative = NonNegative Int deriving Show
+-- >>> instance Arbitrary Small where arbitrary = Small . (`mod` 30) <$> arbitrary
+-- >>> instance Arbitrary NonNegative where arbitrary = NonNegative . abs . (`mod` 30) <$> arbitrary
+-- >>> instance Arbitrary Positive where arbitrary = Positive . (1+) . abs . (`mod` 30) <$> arbitrary
 --
 
 type Pos = (Int, Int)   -- ^ position is a pir of Int's
@@ -24,8 +27,8 @@ dynamic (x0, y0) (x, y) = dynamic0 (x - x0) (y - y0)
 
 -- | gives stabilized (Q, V) pair
 --
--- This property says that stable V == min stable Q
--- prop> True == (uncurry (==) $ minimum *** id $ dynamic0 (getInt x) (getInt y))
+-- This property says that stable V == min stable Q (not holds for x == y == 0)
+-- prop> \(Positive x) (Positive y) -> True == (uncurry (==) $ minimum *** id $ dynamic0 x y)
 dynamic0 :: Int              -- ^ x coordinate
          -> Int              -- ^ y coordinate
          -> ([Int], Int)     -- ^ return pair (Q, V)
@@ -41,20 +44,22 @@ qv x y n = (fqmem x y n, fvmem n x y)
 
 -- | memoized version of fq
 -- 
--- prop> fqmem (getInt x) (getInt y) (getInt n) == fq (getInt x) (getInt y) (getInt n)
+-- prop> \(NonNegative n) (Small x) (Small y) -> fqmem x y n == fq x y n
 fqmem :: Int -> Int -> Int -> [Int]
 fqmem = memo3 fq
 
 -- | memoized version of fv
 --
--- prop> fvmem (getInt n) (getInt x) (getInt y) == fv (getInt n) (getInt x) (getInt y)
+-- prop> \(NonNegative n) (Small x) (Small y) -> fvmem n x y == fv n x y
 fvmem :: Int -> Int -> Int -> Int
 fvmem = memo3 fv
 
 -- | calculates Q 
 --
 -- prop> fq x y 0 == [0,0,0,0]
--- prop> (minimum $ fq (getInt x) (getInt y) (getInt n)) >= fv (getInt n) (getInt x) (getInt y)
+--
+-- This property says V always <= min Q. Not holds for n == 0
+-- prop> \(Positive n) (Small x) (Small y) -> (minimum $ fq x y n) >= fv n x y
 fq  :: Int      -- ^ x coordinate 
     -> Int      -- ^ y coordinate
     -> Int      -- ^ step number
@@ -68,12 +73,10 @@ fq x y n = (cost (x, y) +) . (uncurry $ fvmem n) <$> neighbours (x, y)
 -- prop> fv 0 x y == cost (x, y)
 --
 -- V is symmetric to substituting x and y
--- prop> fv (getInt n) (getInt x) (getInt y) == fv (getInt n) (getInt y) (getInt x)
+-- prop> \(NonNegative n) (Small x) (Small y) -> fv n x y == fv n y x
 --
 -- V is symmetric to changing sign of x and/or y
--- prop> fv (getInt n) (getInt x) (getInt y) == fv (getInt n) (getInt (-x)) (getInt y)
--- prop> fv (getInt n) (getInt x) (getInt y) == fv (getInt n) (getInt x) (getInt (-y))
--- prop> fv (getInt n) (getInt x) (getInt y) == fv (getInt n) (getInt (-x)) (getInt (-y))
+-- prop> \(NonNegative n) (Small x) (Small y) -> fv n x y == fv n (-x) (-y)
 fv  :: Int  -- ^ step number 
     -> Int  -- ^ x coordinate 
     -> Int  -- ^ y coordinate

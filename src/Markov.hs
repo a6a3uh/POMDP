@@ -7,10 +7,12 @@ import Dynamic
 -- >>> import Test.QuickCheck
 -- >>> import Control.Monad
 --
--- >>> newtype TInt = TInt {getInt :: Int} deriving (Eq, Ord, Show, Num, Integral, Real, Enum)
---
--- >>> instance Arbitrary TInt where arbitrary = liftM TInt (choose (1, 30) :: Gen Int) 
---
+-- >>> newtype Small = Small Int deriving Show
+-- >>> newtype Positive = Positive Int deriving Show
+-- >>> newtype NonNegative = NonNegative Int deriving Show
+-- >>> instance Arbitrary Small where arbitrary = Small . (`mod` 30) <$> arbitrary
+-- >>> instance Arbitrary NonNegative where arbitrary = NonNegative . abs . (`mod` 30) <$> arbitrary
+-- >>> instance Arbitrary Positive where arbitrary = Positive . (1+) . abs . (`mod` 30) <$> arbitrary
 
 -- | combines many targets with their probabilities to give 4 cost values in current position
 --
@@ -31,7 +33,7 @@ markovOut x0 xs ps = foldl (zipWith (+)) [0,0,0,0] pcosts
 -- I believe this 'exp' is just a dirty hack. It just produces plausible values
 --
 -- Probability is less than 1
--- prop> bayesPrior 3 (getInt x, getInt y) (getInt x1, getInt y1) <= 1.0
+-- prop> \(Small x) (Small y) (Small x1) (Small y1) -> bayesPrior 3 (x, y) (x1, y1) <= 1.0
 bayesPrior  :: Int      -- ^ command
             -> Pos      -- ^ current position
             -> Pos      -- ^ target position
@@ -44,7 +46,7 @@ bayesPrior a p0 p = exp . fromIntegral $ v - (q !! a)
 -- p (a | x, y, n) = P (a | x, y, n) / Sum (P (a | x, y, ...))
 --
 -- Probability is less than 1
--- prop> bayesPosterior 3 (getInt x, getInt y) [(getInt x1, getInt y1),(getInt x2, getInt y2)] 1 <= 1.0
+-- prop> \(Small x) (Small y) (Small x1) (Small x2) (Small y1) (Small y2) -> bayesPosterior 3 (x, y) [(x1, y1),(x2, y2)] 1 <= 1.0
 bayesPosterior  :: Int      -- ^ command
                 -> Pos      -- ^ current position
                 -> [Pos]    -- ^ target positions
@@ -56,7 +58,7 @@ bayesPosterior a p0 ps n = let prob = bayesPrior a p0
 -- | This function recalculates probability of target when command from user arrives
 --
 -- Probability is less than 1
--- prop> markovInEach (getInt x, getInt y) [(x1,y1),(x2,y2)] [0.75,0.25] 0 0 <= 1.0
+-- prop> \(Small x) (Small y) (Small x1) (Small x2) (Small y1) (Small y2) -> markovInEach (x, y) [(x1,y1),(x2,y2)] [0.75,0.25] 0 0 <= 1.0
 markovInEach    :: Pos      -- ^ current position
                 -> [Pos]    -- ^ positons of targets
                 -> [Double] -- ^ probabilities of targets before user command
@@ -70,7 +72,7 @@ markovInEach p ps pr n a =  bayes n * (pr !! n) / sum (zipWith (*) bayeses pr)
 -- | Updates all probabilities on user's input
 -- 
 -- All probabilities should sum to 1
--- prop> abs (sum (markovIn (getInt x, getInt y) [(x1,y1),(x2,y2)] [0.75,0.25] 1) - 1.0) < 1e-6
+-- prop> \(Small x) (Small y) (Small x1) (Small x2) (Small y1) (Small y2) -> abs (sum (markovIn (x, y) [(x1,y1),(x2,y2)] [0.75,0.25] 1) - 1.0) < 1e-2
 markovIn    :: Pos      -- ^ current position
             -> [Pos]    -- ^ positons of targets
             -> [Double] -- ^ probabilities of targets before user command
