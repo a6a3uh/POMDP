@@ -3,32 +3,53 @@ module Dynamic where
 import Data.MemoTrie (memo3)
 
 -- $setup
--- >>>:set -XGeneralizedNewtypeDeriving
+-- >>>:set -XScopedTypeVariables
+--
 -- >>> import Test.QuickCheck
--- >>> import Control.Applicative
 -- >>> import Control.Arrow
+-- >>> import Data.List
 --
--- >>> newtype Small = Small Int deriving Show
--- >>> newtype Positive = Positive Int deriving Show
--- >>> newtype NonNegative = NonNegative Int deriving Show
--- >>> instance Arbitrary Small where arbitrary = Small . (`mod` 30) <$> arbitrary
--- >>> instance Arbitrary NonNegative where arbitrary = NonNegative . abs . (`mod` 30) <$> arbitrary
--- >>> instance Arbitrary Positive where arbitrary = Positive . (1+) . abs . (`mod` 30) <$> arbitrary
---
+-- >>> newtype Bounded = Bounded Int deriving Show
+-- >>> instance Arbitrary Bounded where arbitrary = Bounded . (`mod` 30) <$> arbitrary
+-- >>> newtype BoundedPositive = BoundedPositive Int deriving Show
+-- >>> instance Arbitrary BoundedPositive where arbitrary = BoundedPositive . (`mod` 30) . (1+) . abs <$> arbitrary
 
 type Pos = (Int, Int)   -- ^ position is a pir of Int's
 
 -- | gives (Q, V) for moving from curretn point to arbitraty point
 --
+-- In the setup below moving up is a best choise
+-- >>> let costs = fst (dynamic (0, 0) (0, 3)) in elemIndex (minimum costs) costs
+-- Just 3
+--
+-- In the setup below moving right is a best choise
+-- >>> let costs = fst (dynamic (0, 0) (3, 0)) in elemIndex (minimum costs) costs
+-- Just 1
+--
+-- In the setup below moving right and up has the same cost (the same for down and left). And moving left is worse than moving right
+-- >>> uncurry (==) $ (!!1) &&& (!!3) $ fst (dynamic (0, 0) (3, 3))
+-- True
+-- >>> uncurry (==) $ (!!0) &&& (!!2) $ fst (dynamic (0, 0) (3, 3))
+-- True
+-- >>> uncurry (>) $ (!!0) &&& (!!1) $ fst (dynamic (0, 0) (3, 3))
+-- True
 dynamic :: Pos          -- ^ current position
         -> Pos          -- ^ target position
         -> ([Int], Int) -- ^ pair (Q V)
-dynamic (x0, y0) (x, y) = dynamic0 (x - x0) (y - y0)
+dynamic (x0, y0) (x, y) = dynamic0 (x0 - x) (y0 - y)
 
 -- | gives stabilized (Q, V) pair
 --
 -- This property says that stable V == min stable Q (not holds for x == y == 0)
--- prop> \(Positive x) (Positive y) -> True == (uncurry (==) $ minimum *** id $ dynamic0 x y)
+-- prop> \(BoundedPositive x) (BoundedPositive y) -> True == (uncurry (==) $ minimum *** id $ dynamic0 x y)
+--
+-- In the setup below moving left is a best choise
+-- >>> let costs = fst (dynamic0 3 0) in elemIndex (minimum costs) costs
+-- Just 0
+--
+-- In the setup below moving down is a best choise
+-- >>> let costs = fst (dynamic0 0 3) in elemIndex (minimum costs) costs
+-- Just 2
 dynamic0 :: Int              -- ^ x coordinate
          -> Int              -- ^ y coordinate
          -> ([Int], Int)     -- ^ return pair (Q, V)
@@ -44,13 +65,13 @@ qv x y n = (fqmem x y n, fvmem n x y)
 
 -- | memoized version of fq
 -- 
--- prop> \(NonNegative n) (Small x) (Small y) -> fqmem x y n == fq x y n
+-- prop> \(NonNegative n) (Bounded x) (Bounded y) -> fqmem x y n == fq x y n
 fqmem :: Int -> Int -> Int -> [Int]
 fqmem = memo3 fq
 
 -- | memoized version of fv
 --
--- prop> \(NonNegative n) (Small x) (Small y) -> fvmem n x y == fv n x y
+-- prop> \(NonNegative n) (Bounded x) (Bounded y) -> fvmem n x y == fv n x y
 fvmem :: Int -> Int -> Int -> Int
 fvmem = memo3 fv
 
@@ -59,7 +80,7 @@ fvmem = memo3 fv
 -- prop> fq x y 0 == [0,0,0,0]
 --
 -- This property says V always <= min Q. Not holds for n == 0
--- prop> \(Positive n) (Small x) (Small y) -> (minimum $ fq x y n) >= fv n x y
+-- prop> \(Positive n) (Bounded x) (Bounded y) -> (minimum $ fq x y n) >= fv n x y
 fq  :: Int      -- ^ x coordinate 
     -> Int      -- ^ y coordinate
     -> Int      -- ^ step number
@@ -73,10 +94,10 @@ fq x y n = (cost (x, y) +) . (uncurry $ fvmem n) <$> neighbours (x, y)
 -- prop> fv 0 x y == cost (x, y)
 --
 -- V is symmetric to substituting x and y
--- prop> \(NonNegative n) (Small x) (Small y) -> fv n x y == fv n y x
+-- prop> \(NonNegative n) (Bounded x) (Bounded y) -> fv n x y == fv n y x
 --
 -- V is symmetric to changing sign of x and/or y
--- prop> \(NonNegative n) (Small x) (Small y) -> fv n x y == fv n (-x) (-y)
+-- prop> \(NonNegative n) (Bounded x) (Bounded y) -> fv n x y == fv n (-x) (-y)
 fv  :: Int  -- ^ step number 
     -> Int  -- ^ x coordinate 
     -> Int  -- ^ y coordinate
