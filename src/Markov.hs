@@ -31,11 +31,11 @@ markovOut   :: Pos      -- ^ initial position
             -> [Pos]    -- ^ list of targets positions
             -> [Double] -- ^ list of probabilities (should sum to 1) for each target (lengths should be the same)
             -> [Double] -- ^ 4 cost values for each of 4 directions
-markovOut x0 xs pr = foldl (zipWith (+)) [0,0,0,0] pcosts
-    where   costs :: [[Int]]        -- ^ list of 4 element lists of costs for moving in each direction
+markovOut x0 xs pr = foldl (zipWith (+)) [0.0,0.0,0.0,0.0] pcosts
+    where   costs :: [[Double]]        -- ^ list of 4 element lists of costs for moving in each direction
             costs = fst . dynamic x0 <$> xs
             pcosts :: [[Double]]    -- ^ same costs but taking into account the probabilities of each target
-            pcosts = let f p cs = (p *) . fromIntegral <$> cs 
+            pcosts = let f p cs = (p *) <$> cs 
                      in zipWith f pr costs
 
 -- | 'bayesPrior' apriory probability of command for particular target
@@ -49,7 +49,7 @@ bayesPrior  :: Int      -- ^ command
             -> Pos      -- ^ current position
             -> Pos      -- ^ target position
             -> Double   -- ^ apriory probability of user choosing command in current situation
-bayesPrior a p0 p = exp . fromIntegral $ v - (q !! a)
+bayesPrior a p0 p = exp $ v - (q !! a)
     where (q, v) = dynamic p0 p
 
 

@@ -35,7 +35,7 @@ type Pos = (Int, Int)   -- ^ position is a pir of Int's
 -- True
 dynamic :: Pos          -- ^ current position
         -> Pos          -- ^ target position
-        -> ([Int], Int) -- ^ pair (Q V)
+        -> ([Double], Double) -- ^ pair (Q V)
 dynamic (x0, y0) (x, y) = dynamic0 (x0 - x) (y0 - y)
 
 -- | gives stabilized (Q, V) pair
@@ -52,7 +52,7 @@ dynamic (x0, y0) (x, y) = dynamic0 (x0 - x) (y0 - y)
 -- Just 2
 dynamic0 :: Int              -- ^ x coordinate
          -> Int              -- ^ y coordinate
-         -> ([Int], Int)     -- ^ return pair (Q, V)
+         -> ([Double], Double)     -- ^ return pair (Q, V)
 dynamic0 x y = lastUnique $ map (qv x y) [1 ..]
     where lastUnique (x0:x1:xs) | x0 == x1  = x0 
                                 | otherwise = lastUnique (x1:xs)
@@ -60,19 +60,19 @@ dynamic0 x y = lastUnique $ map (qv x y) [1 ..]
 
 -- | gives pair of memoized Q and V
 --
-qv :: Int -> Int -> Int -> ([Int], Int)
+qv :: Int -> Int -> Int -> ([Double], Double)
 qv x y n = (fqmem x y n, fvmem n x y)
 
 -- | memoized version of fq
 -- 
 -- prop> \(NonNegative n) (Bounded x) (Bounded y) -> fqmem x y n == fq x y n
-fqmem :: Int -> Int -> Int -> [Int]
+fqmem :: Int -> Int -> Int -> [Double]
 fqmem = memo3 fq
 
 -- | memoized version of fv
 --
 -- prop> \(NonNegative n) (Bounded x) (Bounded y) -> fvmem n x y == fv n x y
-fvmem :: Int -> Int -> Int -> Int
+fvmem :: Int -> Int -> Int -> Double
 fvmem = memo3 fv
 
 -- | calculates Q 
@@ -81,10 +81,10 @@ fvmem = memo3 fv
 --
 -- This property says V always <= min Q. Not holds for n == 0
 -- prop> \(Positive n) (Bounded x) (Bounded y) -> (minimum $ fq x y n) >= fv n x y
-fq  :: Int      -- ^ x coordinate 
-    -> Int      -- ^ y coordinate
-    -> Int      -- ^ step number
-    -> [Int]    -- ^ returns list of 4 costs for each possible step
+fq  :: Int          -- ^ x coordinate 
+    -> Int          -- ^ y coordinate
+    -> Int          -- ^ step number
+    -> [Double]     -- ^ returns list of 4 costs for each possible step
 fq _ _ 0 = [0, 0, 0, 0]           -- Q at 0 step is 0 in all directions
 fq x y n = (cost (x, y) +) . (uncurry $ fvmem n) <$> neighbours (x, y)
 
@@ -98,10 +98,10 @@ fq x y n = (cost (x, y) +) . (uncurry $ fvmem n) <$> neighbours (x, y)
 --
 -- V is symmetric to changing sign of x and/or y
 -- prop> \(NonNegative n) (Bounded x) (Bounded y) -> fv n x y == fv n (-x) (-y)
-fv  :: Int  -- ^ step number 
-    -> Int  -- ^ x coordinate 
-    -> Int  -- ^ y coordinate
-    -> Int  -- ^ returns cost of moving to (x, y)
+fv  :: Int      -- ^ step number 
+    -> Int      -- ^ x coordinate 
+    -> Int      -- ^ y coordinate
+    -> Double   -- ^ returns cost of moving to (x, y)
 fv _ 0 0 = 0                        -- V at (0, 0) is 0 at any atep
 fv 0 x y = cost (x, y)              -- V at 0 step is a cost
 fv n x y | y' > x' = fv n y' x'     -- function is symmetric to change x by y (due to properties of cost function)
@@ -112,8 +112,9 @@ fv n x y | y' > x' = fv n y' x'     -- function is symmetric to change x by y (d
           
 -- | cost function
 --
-cost :: Pos -> Int
-cost (x, y) = abs x + abs y
+cost :: Pos -> Double
+cost (x, y) = 1 / (1 + exp (-s)) -- if s < 5 then s else 5
+    where s = fromIntegral $ abs x + abs y
 
 -- | gives 4 neighbour points
 --
