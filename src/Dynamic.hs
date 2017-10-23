@@ -1,6 +1,8 @@
 module Dynamic where
     
-import Data.MemoTrie (memo3)
+-- import Data.MemoTrie (memo3)
+import Control.Monad.Memo
+import Control.Monad.Identity
 
 -- $setup
 -- >>>:set -XScopedTypeVariables
@@ -10,11 +12,15 @@ import Data.MemoTrie (memo3)
 -- >>> import Data.List
 --
 -- >>> newtype Bounded = Bounded Int deriving Show
--- >>> instance Arbitrary Bounded where arbitrary = Bounded . (`mod` 30) <$> arbitrary
+-- >>> instance Arbitrary Bounded where arbitrary = Bounded . (`mod` 5) <$> arbitrary
 -- >>> newtype BoundedPositive = BoundedPositive Int deriving Show
--- >>> instance Arbitrary BoundedPositive where arbitrary = BoundedPositive . (`mod` 30) . (1+) . abs <$> arbitrary
+-- >>> instance Arbitrary BoundedPositive where arbitrary = BoundedPositive  . succ . abs . (`mod` 5) <$> arbitrary
 
 type Pos = (Int, Int)   -- ^ position is a pir of Int's
+
+type MemoQ = MemoT (Int, Int, Int) [Double]
+type MemoV = MemoT (Int, Int, Int) Double
+type MemoQV = MemoQ (MemoV Identity)
 
 -- | gives (Q, V) for moving from curretn point to arbitraty point
 --
@@ -61,54 +67,47 @@ dynamic0 x y = lastUnique $ map (qv x y) [1 ..]
 -- | gives pair of memoized Q and V
 --
 qv :: Int -> Int -> Int -> ([Double], Double)
-qv x y n = (fqmem x y n, fvmem n x y)
-
--- | memoized version of fq
--- 
--- prop> \(NonNegative n) (Bounded x) (Bounded y) -> fqmem x y n == fq x y n
-fqmem :: Int -> Int -> Int -> [Double]
-fqmem = memo3 fq
-
--- | memoized version of fv
---
--- prop> \(NonNegative n) (Bounded x) (Bounded y) -> fvmem n x y == fv n x y
-fvmem :: Int -> Int -> Int -> Double
-fvmem = memo3 fv
+qv x y n = (evalQ x y n, evalV n x y)
 
 -- | calculates Q 
 --
--- prop> fq x y 0 == [0,0,0,0]
+-- prop> evalQ x y 0 == [0,0,0,0]
 --
 -- This property says V always <= min Q. Not holds for n == 0
--- prop> \(Positive n) (Bounded x) (Bounded y) -> (minimum $ fq x y n) >= fv n x y
-fq  :: Int          -- ^ x coordinate 
-    -> Int          -- ^ y coordinate
-    -> Int          -- ^ step number
-    -> [Double]     -- ^ returns list of 4 costs for each possible step
-fq _ _ 0 = [0, 0, 0, 0]           -- Q at 0 step is 0 in all directions
-fq x y n = (cost (x, y) +) . (uncurry $ fvmem n) <$> neighbours (x, y)
+-- prop> \(Positive n) (Bounded x) (Bounded y) -> (minimum $ evalQ x y n) >= evalV n x y
+evalQ :: Int -> Int -> Int -> [Double]
+evalQ x y n = startEvalMemo . startEvalMemoT $ fqmon  x y n
 
 -- | calculates V
 --
--- prop> fv n 0 0 == 0
--- prop> fv 0 x y == cost (x, y)
+-- prop> evalV n 0 0 == cost (0, 0)
+-- prop> evalV 0 x y == cost (x, y)
 --
 -- V is symmetric to substituting x and y
--- prop> \(NonNegative n) (Bounded x) (Bounded y) -> fv n x y == fv n y x
+-- prop> \(NonNegative n) (Bounded x) (Bounded y) -> evalV n x y == evalV n y x
 --
 -- V is symmetric to changing sign of x and/or y
--- prop> \(NonNegative n) (Bounded x) (Bounded y) -> fv n x y == fv n (-x) (-y)
-fv  :: Int      -- ^ step number 
-    -> Int      -- ^ x coordinate 
-    -> Int      -- ^ y coordinate
-    -> Double   -- ^ returns cost of moving to (x, y)
-fv _ 0 0 = 0                        -- V at (0, 0) is 0 at any atep
-fv 0 x y = cost (x, y)              -- V at 0 step is a cost
-fv n x y | y' > x' = fv n y' x'     -- function is symmetric to change x by y (due to properties of cost function)
-         | x' > 100 = 1000000000    -- limits on the board size
-         | otherwise = minimum $ fqmem x' y' (n - 1)
-    where x' = abs x
-          y' = abs y
+-- prop> \(NonNegative n) (Bounded x) (Bounded y) -> evalV n x y == evalV n (-x) (-y)
+evalV :: Int -> Int -> Int -> Double
+evalV n x y = startEvalMemo . startEvalMemoT $ fvmon  n x y
+
+fqmon :: Int -> Int -> Int -> MemoQV [Double]
+fqmon _ _ 0 = return [0,0,0,0]
+fqmon x y n = do
+    let pts = neighbours (x, y)
+        v = for3 memol1 fvmon n
+        c = cost (x, y)
+        q = fmap (c +) . uncurry v
+    traverse q pts
+
+fvmon :: Int -> Int -> Int -> MemoQV Double
+fvmon _ 0 0 = return $ cost (0, 0)
+fvmon 0 x y = return $ cost (x, y)
+fvmon n x y | limit     = return 1000000000
+            | otherwise = liftM minimum $ for3 memol0 fqmon x' y' (n - 1)
+            where x' = abs x
+                  y' = abs y
+                  limit = x' > 25 || y' > 25
           
 -- | cost function
 --

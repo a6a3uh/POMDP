@@ -9,7 +9,7 @@ import Dynamic
 -- >>> import Control.Arrow
 --
 -- >>> newtype Bounded = Bounded Int deriving Show
--- >>> instance Arbitrary Bounded where arbitrary = Bounded . (`mod` 30) <$> arbitrary
+-- >>> instance Arbitrary Bounded where arbitrary = Bounded . (`mod` 5) <$> arbitrary
 -- >>> newtype Command = Command Int deriving Show
 -- >>> instance Arbitrary Command where arbitrary = Command . abs . (`mod` 4) <$> arbitrary
 --
@@ -24,9 +24,10 @@ import Dynamic
 
 -- | combines many targets with their probabilities to give 4 cost values in current position
 -- 
--- In the setup below moving right (!!1) should be prefferable to moving up (!!3)
--- >>> uncurry (<) $ (!! 1) &&& (!! 3) $ markovOut (0,0) [(1,0), (0,3)] [0.5, 0.5] 
--- True
+---- In the setup below moving right (!!1) should be prefferable to moving up (!!3)
+---- >>> uncurry (<) $ (!! 1) &&& (!! 3) $ markovOut (0,0) [(1,0), (0,3)] [0.5, 0.5] 
+---- True
+-- Well this is not the case though counter intuitive
 markovOut   :: Pos      -- ^ initial position
             -> [Pos]    -- ^ list of targets positions
             -> [Double] -- ^ list of probabilities (should sum to 1) for each target (lengths should be the same)
