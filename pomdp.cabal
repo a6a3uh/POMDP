@@ -20,6 +20,7 @@ library
         , Markov
   build-depends:       base >= 4.7 && < 5
                      , MemoTrie
+                     , mtl
   default-language:    Haskell2010
 
 executable pomdp-exe
