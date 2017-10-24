@@ -41,10 +41,10 @@ type Dynamic n r m = (Integral n, Floating r, Ord r, MonadReader (Cost n r) m, M
 -- True
 -- >>> uncurry (>) $ (!!0) &&& (!!1) $ fst (runReader (dynamic (0, 0) (3, 3)) cost)
 -- True
-dynamic :: Dynamic n r m--(Integral n, Real r, MonadReader Cost m, MonadMemo (n, n, n) [r] m)
-        => Pos n          -- ^ current position
-        -> Pos n          -- ^ target position
-        -> m ([r], r) -- ^ pair (Q V)
+dynamic :: Dynamic n r m
+        => Pos n        -- ^ current position
+        -> Pos n        -- ^ target position
+        -> m ([r], r)   -- ^ pair (Q V)
 dynamic (x0, y0) (x, y) = dynamic0 (x0 - x) (y0 - y)
 
 -- | gives stabilized (Q, V) pair
@@ -59,7 +59,7 @@ dynamic (x0, y0) (x, y) = dynamic0 (x0 - x) (y0 - y)
 -- In the setup below moving down is a best choise
 -- >>> let costs = fst (runReader (dynamic0 0 3) cost) in elemIndex (minimum costs) costs
 -- Just 2
-dynamic0 :: Dynamic n r m --(Integral n, Real r, MonadReader Cost m, MonadMemo (n, n, n) [r] m)
+dynamic0 :: Dynamic n r m
          => n              -- ^ x coordinate
          -> n              -- ^ y coordinate
          -> m ([r], r)     -- ^ return pair (Q, V)
@@ -72,7 +72,7 @@ dynamic0 x y = do
 
 -- | gives pair of memoized Q and V
 --
-qv  :: Dynamic n r m --(Integral n, Real r, MonadReader Cost m, MonadMemo (n, n, n) [r] m)
+qv  :: Dynamic n r m
     => n 
     -> n 
     -> n 
@@ -100,7 +100,7 @@ qv x y n = do
 --
 -- This property says V always <= min Q. Not holds for n == 0
 -- prop> \(Positive n) (Bounded x) (Bounded y) -> (minimum $ runReader (fq x y n) cost) >= runReader (fv n x y) cost
-fq  :: Dynamic n r m --(Integral n, Real r, MonadReader Cost m, MonadMemo (n, n, n) [r] m)
+fq  :: Dynamic n r m
     => n          -- ^ x coordinate 
     -> n          -- ^ y coordinate
     -> n          -- ^ step number
@@ -123,7 +123,7 @@ fq x y n = do
 --
 -- V is symmetric to changing sign of x and/or y
 -- prop> \(NonNegative n) (Bounded x) (Bounded y) -> runReader (fv n x y) cost == runReader (fv n (-x) (-y)) cost
-fv  :: Dynamic n r m --(Integral n, Real r, MonadReader Cost m, MonadMemo (n, n, n) [r] m)
+fv  :: Dynamic n r m
     => n --Int      -- ^ step number 
     -> n --Int      -- ^ x coordinate 
     -> n --Int      -- ^ y coordinate
