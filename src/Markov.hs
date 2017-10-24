@@ -33,10 +33,10 @@ import Dynamic
 -- ---True
 -- this is not ture actually
 markovOut   :: Dynamic n r m
-            => (n, n)      -- ^ initial position
-            -> [(n, n)]    -- ^ list of targets positions
-            -> [r] -- ^ list of probabilities (should sum to 1) for each target (lengths should be the same)
-            -> m [r] -- ^ 4 cost values for each of 4 directions
+            => Pos n    -- ^ initial position
+            -> [Pos n]  -- ^ list of targets positions
+            -> [r]      -- ^ list of probabilities (should sum to 1) for each target (lengths should be the same)
+            -> m [r]    -- ^ 4 cost values for each of 4 directions
 markovOut x0 xs pr = do
     costs <- traverse (liftM fst . dynamic x0) xs
     let f p cs = (p *) <$> cs
@@ -51,10 +51,10 @@ markovOut x0 xs pr = do
 -- Probability is less than 1
 -- prop> \(p0::BoundedPos) (p1::BoundedPos) -> runReader (bayesPrior 3 (b2p p0) (b2p p1)) cost <= 1.0
 bayesPrior  :: Dynamic n r m
-            => n      -- ^ command
-            -> (n, n)      -- ^ current position
-            -> (n, n)      -- ^ target position
-            -> m r   -- ^ apriory probability of user choosing command in current situation
+            => n        -- ^ command
+            -> Pos n    -- ^ current position
+            -> Pos n    -- ^ target position
+            -> m r      -- ^ apriory probability of user choosing command in current situation
 bayesPrior a p0 p = do
     (q, v) <- dynamic p0 p
     return $ exp $ v - (q !! fromIntegral a)
@@ -66,11 +66,11 @@ bayesPrior a p0 p = do
 -- Probability is less than 1
 -- prop> \(Command a) (p::BoundedPos) (NonEmpty (ps::[BoundedPos])) (Positive n) -> runReader (bayesPosterior a (b2p p) (b2p <$> ps) (n `mod` length ps)) cost <= 1.0 
 bayesPosterior  :: Dynamic n r m
-                => n      -- ^ command
-                -> (n, n)      -- ^ current position
-                -> [(n, n)]    -- ^ target positions
-                -> n      -- ^ target index
-                -> m r   -- ^ posteriory probability after user issued some command
+                => n        -- ^ command
+                -> Pos n    -- ^ current position
+                -> [Pos n]  -- ^ target positions
+                -> n        -- ^ target index
+                -> m r      -- ^ posteriory probability after user issued some command
 bayesPosterior a p0 ps n = do
     let prob = bayesPrior a p0
     p <- prob (ps !! fromIntegral n) 
@@ -84,12 +84,12 @@ bayesPosterior a p0 ps n = do
 -- prop \(p::BoundedPos) (NonEmpty (ps::[BoundedPos])) (NonEmpty (pr::[Positive Int])) (Positive n) (Command a) -> 
 --          markovInEach (b2p p) (b2p <$> ps) (((/ (fromIntegral.sum) (getPositive<$>pr)).fromIntegral.getPositive) <$> pr) (n `mod` length ps) a
 markovInEach    :: Dynamic n r m
-                => (n, n)      -- ^ current position
-                -> [(n, n)]    -- ^ positons of targets
-                -> [r] -- ^ probabilities of targets before user command
-                -> n      -- ^ index of target
-                -> n      -- ^ command issued by user
-                -> m r   -- ^ new probability of target
+                => Pos n    -- ^ current position
+                -> [Pos n]  -- ^ positons of targets
+                -> [r]      -- ^ probabilities of targets before user command
+                -> n        -- ^ index of target
+                -> n        -- ^ command issued by user
+                -> m r      -- ^ new probability of target
 markovInEach p ps pr n a =  do
     let bayes = bayesPosterior a p ps
     bayeses <- sequence $ bayes <$> [0 .. fromIntegral (length pr - 1)]
@@ -102,11 +102,11 @@ markovInEach p ps pr n a =  do
 -- All probabilities should sum to 1
 -- prop> \(Bounded x) (Bounded y) (Bounded x1) (Bounded x2) (Bounded y1) (Bounded y2) -> abs (sum (runReader (markovIn (x, y) [(x1,y1),(x2,y2)] [0.75,0.25] 1) cost)- 1.0) < 1e-2
 markovIn    :: Dynamic n r m
-            => (n, n)      -- ^ current position
-            -> [(n, n)]    -- ^ positons of targets
-            -> [r] -- ^ probabilities of targets before user command
-            -> n      -- ^ command issued by user
-            -> m [r] -- ^ new probability of target
+            => Pos n    -- ^ current position
+            -> [Pos n]  -- ^ positons of targets
+            -> [r]      -- ^ probabilities of targets before user command
+            -> n        -- ^ command issued by user
+            -> m [r]    -- ^ new probability of target
 markovIn p ps pr a = do
     let markovInEach' n = markovInEach p ps pr n a
     sequence $ markovInEach' <$> [0 .. fromIntegral (length pr - 1)]

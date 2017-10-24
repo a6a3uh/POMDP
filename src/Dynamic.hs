@@ -19,10 +19,9 @@ import Control.Monad.Memo
 -- >>> newtype BoundedPositive = BoundedPositive Int deriving Show
 -- >>> instance Arbitrary BoundedPositive where arbitrary = BoundedPositive  . succ . (`mod` 2) . abs <$> arbitrary
 
-type Pos = (Int, Int)   -- ^ position is a pir of Int's
--- type Cost n r = (Integral n, Integral n, Floating r) -> (n, n) -> r
-
-type Dynamic n r m = (Integral n, Floating r, Ord r, MonadReader ((n, n) -> r) m, MonadMemo (n, n, n) [r] m)
+type Pos n = (n, n)   -- ^ position is a pir of Int's
+type Cost n r = (n, n) -> r
+type Dynamic n r m = (Integral n, Floating r, Ord r, MonadReader (Cost n r) m, MonadMemo (n, n, n) [r] m)
 -- type MemoQ = MemoT (Int, Int, Int) [Double]
 
 -- | gives (Q, V) for moving from curretn point to arbitraty point
@@ -43,8 +42,8 @@ type Dynamic n r m = (Integral n, Floating r, Ord r, MonadReader ((n, n) -> r) m
 -- >>> uncurry (>) $ (!!0) &&& (!!1) $ fst (runReader (dynamic (0, 0) (3, 3)) cost)
 -- True
 dynamic :: Dynamic n r m--(Integral n, Real r, MonadReader Cost m, MonadMemo (n, n, n) [r] m)
-        => (n, n)--Pos          -- ^ current position
-        -> (n, n)--Pos          -- ^ target position
+        => Pos n          -- ^ current position
+        -> Pos n          -- ^ target position
         -> m ([r], r) -- ^ pair (Q V)
 dynamic (x0, y0) (x, y) = dynamic0 (x0 - x) (y0 - y)
 
@@ -143,11 +142,11 @@ fv n x y | y' > x' = fv n y' x'     -- function is symmetric to change x by y (d
           
 -- | cost function
 --
-cost :: (Integral n, Floating r) => (n, n) -> r
+cost :: (Integral n, Floating r) => Cost n r
 cost (x, y) = 1 / (1 + exp (-s)) -- if s < 5 then s else 5
     where s = fromIntegral $ abs x + abs y
 
 -- | gives 4 neighbour points
 --
-neighbours :: Integral n => (n, n) -> [(n, n)]
+neighbours :: Integral n => Pos n -> [Pos n]
 neighbours (x, y) = [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]
