@@ -133,7 +133,7 @@ fq x y n = do
     -- let c = cost
     e <- ask
     -- tell $ show (x, y, n) ++ "/n"
-    let v = for3 memol1 fv n
+    let v = for3 memol2 fv n
         q = fmap ((e ^. cost) (x, y) +) . uncurry v
         pts = neighbours (x, y)
     traverse q pts
@@ -165,7 +165,7 @@ fv n x y = do
     e <- ask
     let fv' n x y   | y' > x'       = fv n y' x'     -- function is symmetric to change x by y (due to properties of cost function)
                     | x' > e ^. lim = return 1000000000    -- limits on the board size
-                    | otherwise     = liftM minimum $ for3 memol0 fq x' y' (n - 1)
+                    | otherwise     = liftM minimum $ for3 memol1 fq x' y' (n - 1)
     fv' n x y
     where x' = abs x
           y' = abs y
@@ -180,16 +180,3 @@ costLogistic (x, y) = 1 / (1 + exp (-s)) -- if s < 5 then s else 5
 --
 neighbours :: Integral n => Pos n -> [Pos n]
 neighbours (x, y) = [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]
-
--- type Pos n = (n, n)
--- type Cost n r = Pos n -> r
--- type Dynamic n r m = (Integral n, Floating r, Ord r, Show n, MonadReader (Cost n r) m, MonadWriter String m, MonadMemo (n, n, n) [r] m)
-
--- fq  :: Dynamic n r m => n -> n -> n -> m [r]
--- -- context for Reader Monad is:
--- cost :: (Integral n, Floating r) => Cost n r
-
--- how should I evaluated fq then?
--- so far I was able to go up to here:
--- :t fst . startEvalMemo . runWriterT $ fq 1 1 1
--- but can't apply Reader context with cost function
