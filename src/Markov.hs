@@ -38,7 +38,7 @@ markovOut   :: DynamicConstraint n r
             -> [r]      -- ^ list of probabilities (should sum to 1) for each target (lengths should be the same)
             -> Dynamic n r [r]    -- ^ 4 cost values for each of 4 directions
 markovOut x0 xs pr = do
-    costs <- traverse (liftM fst . dynamic x0) xs
+    costs <- mapM (liftM fst . dynamic x0) xs
     let f p cs = (p *) <$> cs
         pcosts = zipWith f pr costs
     return $ foldl (zipWith (+)) [0.0,0.0,0.0,0.0] pcosts
@@ -92,7 +92,7 @@ markovInEach    :: DynamicConstraint n r
                 -> Dynamic n r r      -- ^ new probability of target
 markovInEach p ps pr n a =  do
     let bayes = bayesPosterior a p ps
-    bayeses <- sequence $ bayes <$> [0 .. fromIntegral (length pr - 1)]
+    bayeses <- mapM bayes [0 .. fromIntegral (length pr - 1)]
     p <- liftM (* (pr !! fromIntegral n)) (bayes n) 
     let ps = (sum . zipWith (*) pr) bayeses
     return $ p / ps
@@ -109,5 +109,5 @@ markovIn    :: DynamicConstraint n r
             -> Dynamic n r [r]    -- ^ new probability of target
 markovIn p ps pr a = do
     let markovInEach' n = markovInEach p ps pr n a
-    sequence $ markovInEach' <$> [0 .. fromIntegral (length pr - 1)]
+    mapM markovInEach' [0 .. fromIntegral (length pr - 1)]
     

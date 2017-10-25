@@ -4,7 +4,6 @@
 
 module Dynamic where
     
--- import Data.MemoTrie (memo3)
 import Control.Monad.Reader
 import Control.Monad.Writer
 import Control.Monad.Memo
@@ -26,26 +25,17 @@ import Control.Lens
 type MemoQ n r = MemoT (n, n, n) [r]
 type MemoV n r = MemoT (n, n, n) r
 type MemoQV n r = MemoQ n r (MemoV n r Identity)
--- type MemoQ n r m = (MonadMemo (n, n, n) [r] m)
--- type MemoV n r m = (MonadMemo (n, n, n) r m)
--- type MemoQV n r v m = (MemoV n r v, MemoQ n r m)
 type Pos n = (n, n)   -- ^ position is a pair
 type Cost n r = Pos n -> r
 data DynamicEnv n r = DynamicEnv 
     { _cost :: Cost n r
     , _lim :: n
-    , _log :: Bool
+    , _logQ :: Bool
     }
-type DynamicConstraint n r = (Integral n, Floating r, Ord r, Show n) --, MonadReader (DynamicEnv n r) m, MonadWriter String m)
--- type DynamicConstraint n r m = (Integral n, Floating r, Ord r, Show n, MonadWriter String m, MonadMemo (n, n, n) [r] m)
-type Dynamic n r a = ReaderT (DynamicEnv n r) (MemoQV n r) a
--- type Dynamic n r m a = ReaderT (DynamicEnv n r) m a
-
+type DynamicConstraint n r = (Integral n, Floating r, Ord r, Show n)
+type Dynamic n r a = ReaderT (DynamicEnv n r) (WriterT String (MemoQV n r)) a
 
 makeLenses ''DynamicEnv
-
--- type Dynamic n r m = (Integral n, Floating r, Ord r, Show n, MonadWriter String m, MonadMemo (n, n, n) [r] m)
-
 
 -- | gives (Q, V) for moving from curretn point to arbitraty point
 --
@@ -130,10 +120,9 @@ fq  :: DynamicConstraint n r
     -> Dynamic n r [r]
 fq _ _ 0 = return [0, 0, 0, 0]           -- Q at 0 step is 0 in all directions
 fq x y n = do
-    -- let c = cost
     e <- ask
-    -- tell $ show (x, y, n) ++ "/n"
-    let v = for3 memol2 fv n
+    when (e ^. logQ) (tell $ show (x, y, n) ++ "/n")
+    let v = for3 memol3 fv n
         q = fmap ((e ^. cost) (x, y) +) . uncurry v
         pts = neighbours (x, y)
     traverse q pts
@@ -154,18 +143,16 @@ fv  :: DynamicConstraint n r
     -> n      -- ^ y coordinate
     -> Dynamic n r r
 fv _ 0 0 = do
-    -- let c = costLogistic
     e <- ask
     return $ (e ^. cost) (0, 0)               -- V at (0, 0) is 0 at any atep
 fv 0 x y = do
-    -- let c = costLogistic
     e <- ask
     return $ (e ^. cost) (x, y)               -- V at 0 step is a cost
 fv n x y = do
     e <- ask
     let fv' n x y   | y' > x'       = fv n y' x'     -- function is symmetric to change x by y (due to properties of cost function)
                     | x' > e ^. lim = return 1000000000    -- limits on the board size
-                    | otherwise     = liftM minimum $ for3 memol1 fq x' y' (n - 1)
+                    | otherwise     = liftM minimum $ for3 memol2 fq x' y' (n - 1)
     fv' n x y
     where x' = abs x
           y' = abs y
