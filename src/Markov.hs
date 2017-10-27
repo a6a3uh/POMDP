@@ -29,7 +29,7 @@ import Dynamic
 -- | combines many targets with their probabilities to give 4 cost values in current position
 -- 
 -- ---In the setup below moving right (!!1) should be prefferable to moving up (!!3)
--- --->>> uncurry (<) $ (!! 1) &&& (!! 3) $ runReader (markovOut (0,0) [(1,0), (0,3)] [0.5, 0.5]) cost
+-- --->>> uncurry (<) $ (!! 1) &&& (!! 3) $ eval (markovOut (0,0) [(1,0), (0,3)] [0.5, 0.5])
 -- ---True
 -- this is not ture actually
 markovOut   :: DynamicConstraint n r
@@ -49,7 +49,7 @@ markovOut x0 xs pr = do
 -- I believe this 'exp' is just a dirty hack. It just produces plausible values
 --
 -- Probability is less than 1
--- prop> \(p0::BoundedPos) (p1::BoundedPos) -> runReader (bayesPrior 3 (b2p p0) (b2p p1)) cost <= 1.0
+-- prop> \(p0::BoundedPos) (p1::BoundedPos) -> eval (bayesPrior 3 (b2p p0) (b2p p1)) <= 1.0
 bayesPrior  :: DynamicConstraint n r
             => n        -- ^ command
             -> Pos n    -- ^ current position
@@ -64,7 +64,7 @@ bayesPrior a p0 p = do
 -- p (a | x, y, n) = P (a | x, y, n) / Sum (P (a | x, y, ...))
 --
 -- Probability is less than 1
--- prop> \(Command a) (p::BoundedPos) (NonEmpty (ps::[BoundedPos])) (Positive n) -> runReader (bayesPosterior a (b2p p) (b2p <$> ps) (n `mod` length ps)) cost <= 1.0 
+-- prop> \(Command a) (p::BoundedPos) (NonEmpty (ps::[BoundedPos])) (Positive n) -> eval (bayesPosterior a (b2p p) (b2p <$> ps) (n `mod` length ps)) <= 1.0 
 bayesPosterior  :: DynamicConstraint n r
                 => n        -- ^ command
                 -> Pos n    -- ^ current position
@@ -74,13 +74,13 @@ bayesPosterior  :: DynamicConstraint n r
 bayesPosterior a p0 ps n = do
     let prob = bayesPrior a p0
     p <- prob (ps !! fromIntegral n) 
-    ps <- liftM sum (traverse prob ps)
-    return $ p / ps
+    ps' <- liftM sum (mapM prob ps)
+    return $ p / ps'
 
 -- | This function recalculates probability of target when command from user arrives
 --
 -- Probability is less than 1
--- prop> \(Bounded x) (Bounded y) (Bounded x1) (Bounded x2) (Bounded y1) (Bounded y2) -> runReader (markovInEach (x, y) [(x1,y1),(x2,y2)] [0.75,0.25] 0 0) cost <= 1.0
+-- prop> \(Bounded x) (Bounded y) (Bounded x1) (Bounded x2) (Bounded y1) (Bounded y2) -> eval (markovInEach (x, y) [(x1,y1),(x2,y2)] [0.75,0.25] 0 0) <= 1.0
 -- prop \(p::BoundedPos) (NonEmpty (ps::[BoundedPos])) (NonEmpty (pr::[Positive Int])) (Positive n) (Command a) -> 
 --          markovInEach (b2p p) (b2p <$> ps) (((/ (fromIntegral.sum) (getPositive<$>pr)).fromIntegral.getPositive) <$> pr) (n `mod` length ps) a
 markovInEach    :: DynamicConstraint n r
@@ -94,13 +94,13 @@ markovInEach p ps pr n a =  do
     let bayes = bayesPosterior a p ps
     bayeses <- mapM bayes [0 .. fromIntegral (length pr - 1)]
     p <- liftM (* (pr !! fromIntegral n)) (bayes n) 
-    let ps = (sum . zipWith (*) pr) bayeses
-    return $ p / ps
+    let ps' = (sum . zipWith (*) pr) bayeses
+    return $ p / ps'
 
 -- | Updates all probabilities on user's input
 -- 
 -- All probabilities should sum to 1
--- prop> \(Bounded x) (Bounded y) (Bounded x1) (Bounded x2) (Bounded y1) (Bounded y2) -> abs (sum (runReader (markovIn (x, y) [(x1,y1),(x2,y2)] [0.75,0.25] 1) cost)- 1.0) < 1e-2
+-- prop> \(Bounded x) (Bounded y) (Bounded x1) (Bounded x2) (Bounded y1) (Bounded y2) -> abs (sum (eval (markovIn (x, y) [(x1,y1),(x2,y2)] [0.75,0.25] 1))- 1.0) < 1e-2
 markovIn    :: DynamicConstraint n r
             => Pos n    -- ^ current position
             -> [Pos n]  -- ^ positons of targets

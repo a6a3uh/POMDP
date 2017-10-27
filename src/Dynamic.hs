@@ -20,6 +20,8 @@ import Control.Lens
 -- >>> instance Arbitrary Bounded where arbitrary = Bounded . (`mod` 3) <$> arbitrary
 -- >>> newtype BoundedPositive = BoundedPositive Int deriving Show
 -- >>> instance Arbitrary BoundedPositive where arbitrary = BoundedPositive  . succ . (`mod` 2) . abs <$> arbitrary
+-- >>> env = DynamicEnv {_cost = costLogistic, _lim = 10, _logQ = False}
+-- >>> eval = fst . fst . startRunMemo . startRunMemoT . fmap fst . runWriterT . flip runReaderT env
 
 
 type MemoQ n r = MemoT (n, n, n) [r]
@@ -31,8 +33,9 @@ data DynamicEnv n r = DynamicEnv
     { _cost :: Cost n r
     , _lim :: n
     , _logQ :: Bool
+    , _maxSteps :: n
     }
-type DynamicConstraint n r = (Integral n, Floating r, Ord r, Show n)
+type DynamicConstraint n r = (Integral n, Floating r, Ord r, Show n)--, MonadReader (DynamicEnv n r) m, MonadWriter String m, MonadMemo (n, n, n) k m)
 type Dynamic n r a = ReaderT (DynamicEnv n r) (WriterT String (MemoQV n r)) a
 
 makeLenses ''DynamicEnv
@@ -40,19 +43,19 @@ makeLenses ''DynamicEnv
 -- | gives (Q, V) for moving from curretn point to arbitraty point
 --
 -- In the setup below moving up is a best choise
--- >>> let costs = fst (runReader (dynamic (0, 0) (0, 3)) cost) in elemIndex (minimum costs) costs
+-- >>> let costs = fst (eval (dynamic (0, 0) (0, 3))) in elemIndex (minimum costs) costs
 -- Just 3
 --
 -- In the setup below moving right is a best choise
--- >>> let costs = fst (runReader (dynamic (0, 0) (3, 0)) cost) in elemIndex (minimum costs) costs
+-- >>> let costs = fst (eval (dynamic (0, 0) (3, 0))) in elemIndex (minimum costs) costs
 -- Just 1
 --
 -- In the setup below moving right and up has the same cost (the same for down and left). And moving left is worse than moving right
--- >>> uncurry (==) $ (!!1) &&& (!!3) $ fst (runReader (dynamic (0, 0) (3, 3)) cost)
+-- >>> uncurry (==) $ (!!1) &&& (!!3) $ fst (eval (dynamic (0, 0) (3, 3)))
 -- True
--- >>> uncurry (==) $ (!!0) &&& (!!2) $ fst (runReader (dynamic (0, 0) (3, 3)) cost)
+-- >>> uncurry (==) $ (!!0) &&& (!!2) $ fst (eval (dynamic (0, 0) (3, 3)))
 -- True
--- >>> uncurry (>) $ (!!0) &&& (!!1) $ fst (runReader (dynamic (0, 0) (3, 3)) cost)
+-- >>> uncurry (>) $ (!!0) &&& (!!1) $ fst (eval (dynamic (0, 0) (3, 3)))
 -- True
 dynamic :: DynamicConstraint n r
         => Pos n        -- ^ current position
@@ -63,14 +66,14 @@ dynamic (x0, y0) (x, y) = dynamic0 (x0 - x) (y0 - y)
 -- | gives stabilized (Q, V) pair
 --
 -- This property says that stable V == min stable Q (not holds for x == y == 0)
--- prop> \(BoundedPositive x) (BoundedPositive y) -> True == (uncurry (==) $ minimum *** id $ runReader (dynamic0 x y) cost)
+-- prop> \(BoundedPositive x) (BoundedPositive y) -> True == (uncurry (==) $ minimum *** id $ eval (dynamic0 x y))
 --
 -- In the setup below moving left is a best choise
--- >>> let costs = fst (runReader (dynamic0 3 0) cost) in elemIndex (minimum costs) costs
+-- >>> let costs = fst (eval (dynamic0 3 0)) in elemIndex (minimum costs)
 -- Just 0
 --
 -- In the setup below moving down is a best choise
--- >>> let costs = fst (runReader (dynamic0 0 3) cost) in elemIndex (minimum costs) costs
+-- >>> let costs = fst (eval (dynamic0 0 3)) in elemIndex (minimum costs)
 -- Just 2
 dynamic0 :: DynamicConstraint n r
          => n              -- ^ x coordinate
@@ -95,24 +98,12 @@ qv x y n = do
     v <- fv n x y
     return (q, v)
 
--- -- | memoized version of fq
--- -- 
--- -- prop> \(NonNegative n) (Bounded x) (Bounded y) -> runReader (fqmem x y n) cost == runReader (fq x y n) cost
--- fqmem :: MonadReader Cost m => Int -> Int -> Int -> m [Double]
--- fqmem = memo3 fq
-
--- -- | memoized version of fv
--- --
--- -- prop> \(NonNegative n) (Bounded x) (Bounded y) -> runReader (fvmem n x y) cost == runReader (fv n x y) cost
--- fvmem :: MonadReader Cost m => Int -> Int -> Int -> m Double
--- fvmem = memo3 fv
-
 -- | calculates Q 
 --
--- prop> runReader (fq x y 0) cost == [0,0,0,0]
+-- prop> eval (fq x y 0) == [0,0,0,0]
 --
 -- This property says V always <= min Q. Not holds for n == 0
--- prop> \(Positive n) (Bounded x) (Bounded y) -> (minimum $ runReader (fq x y n) cost) >= runReader (fv n x y) cost
+-- prop> \(Positive n) (Bounded x) (Bounded y) -> (minimum $ eval (fq x y n)) >= eval (fv n x y)
 fq  :: DynamicConstraint n r
     => n          -- ^ x coordinate 
     -> n          -- ^ y coordinate
@@ -129,14 +120,14 @@ fq x y n = do
 
 -- | calculates V
 --
--- prop> runReader (fv n 0 0) cost == cost (0, 0)
--- prop> runReader (fv 0 x y) cost == cost (x, y)
+-- prop> eval (fv n 0 0) == costLogistic (0, 0)
+-- prop> eval (fv 0 x y) == costLogistic (x, y)
 --
 -- V is symmetric to substituting x and y
--- prop> \(NonNegative n) (Bounded x) (Bounded y) -> runReader (fv n x y) == runReader (fv n y x)
+-- prop> \(NonNegative n) (Bounded x) (Bounded y) -> eval (fv n x y) == eval (fv n y x)
 --
 -- V is symmetric to changing sign of x and/or y
--- prop> \(NonNegative n) (Bounded x) (Bounded y) -> runReader (fv n x y) cost == runReader (fv n (-x) (-y)) cost
+-- prop> \(NonNegative n) (Bounded x) (Bounded y) -> eval (fv n x y) == eval (fv n (-x) (-y))
 fv  :: DynamicConstraint n r
     => n      -- ^ step number 
     -> n      -- ^ x coordinate 
