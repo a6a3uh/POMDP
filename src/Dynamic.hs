@@ -21,7 +21,7 @@ import Control.Lens
 -- >>> newtype BoundedPositive = BoundedPositive Int deriving Show
 -- >>> instance Arbitrary BoundedPositive where arbitrary = BoundedPositive  . succ . (`mod` 2) . abs <$> arbitrary
 -- >>> env = DynamicEnv {_cost = costLogistic, _lim = 10, _logQ = False, _maxSteps = 5}
--- >>> eval = fst . fst . startRunMemo . startRunMemoT . flip runReaderT env . fmap fst . runWriterT
+-- >>> eval = fst . fst . startRunMemo . startRunMemoT . fmap fst . runWriterT . flip runReaderT env
 
 type Pos n = (n, n)   -- ^ position is a pair
 type Cost n r = Pos n -> r
@@ -82,11 +82,12 @@ dynamic0 :: DynamicConstraint n r
          -> n              -- ^ y coordinate
          -> Dynamic n r ([r], r)     -- ^ return pair (Q, V)
 dynamic0 x y = do
-    qv <- traverse (qv x y) [1 ..]
-    return $ lastUnique qv
-    where lastUnique (x0:x1:xs) | x0 == x1  = x0 
-                                | otherwise = lastUnique (x1:xs)
-          lastUnique _          = undefined     -- this never happens just to get rid of compiler warnings
+    let qv' = map (qv x y) [1 ..]
+        lastUnique (x0:x1:xs) = do
+            x0' <- x0
+            x1' <- x1
+            if x0' == x1' then return x0' else lastUnique (x1:xs)
+    lastUnique qv'
 
 -- | gives pair of memoized Q and V
 --
@@ -143,12 +144,10 @@ fv 0 x y = do
     return $ (e ^. dynamicCost) (x, y)               -- V at 0 step is a cost
 fv n x y = do
     e <- ask
-    let fv' n x y   | y' > x'               =  fv n y' x'     -- function is symmetric to change x by y (due to properties of cost function)
-                    | x' > e ^. dynamicLim  = return 1000000000    -- limits on the board size
-                    | otherwise             = liftM minimum $ for3 memol2 fq x' y' (n - 1)
-    fv' n x y
-    where x' = abs x
-          y' = abs y
+    let fv' n' x' y'    | y' > x'                   = fv n' y' x'     -- function is symmetric to change x by y (due to properties of cost function)
+                        | x' > (e ^. dynamicLim)    = return 1000000000    -- limits on the board size
+                        | otherwise                 = liftM minimum $ for3 memol2 fq x' y' (n' - 1)
+    fv' n (abs x) (abs y)
           
 -- | cost function
 --
