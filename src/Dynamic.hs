@@ -20,23 +20,25 @@ import Control.Lens
 -- >>> instance Arbitrary Bounded where arbitrary = Bounded . (`mod` 3) <$> arbitrary
 -- >>> newtype BoundedPositive = BoundedPositive Int deriving Show
 -- >>> instance Arbitrary BoundedPositive where arbitrary = BoundedPositive  . succ . (`mod` 2) . abs <$> arbitrary
--- >>> env = DynamicEnv {_cost = costLogistic, _lim = 10, _logQ = False}
--- >>> eval = fst . fst . startRunMemo . startRunMemoT . fmap fst . runWriterT . flip runReaderT env
+-- >>> env = DynamicEnv {_cost = costLogistic, _lim = 10, _logQ = False, _maxSteps = 5}
+-- >>> eval = fst . fst . startRunMemo . startRunMemoT . flip runReaderT env . fmap fst . runWriterT
 
-
-type MemoQ n r = MemoT (n, n, n) [r]
-type MemoV n r = MemoT (n, n, n) r
-type MemoQV n r = MemoQ n r (MemoV n r Identity)
 type Pos n = (n, n)   -- ^ position is a pair
 type Cost n r = Pos n -> r
 data DynamicEnv n r = DynamicEnv 
-    { _cost :: Cost n r
-    , _lim :: n
-    , _logQ :: Bool
-    , _maxSteps :: n
+    { _dynamicCost :: Cost n r
+    , _dynamicLim :: n
+    , _dynamicLog :: Bool
+    , _dynamicMaxSteps :: n
     }
+type MemoQ n r = MemoT (n, n, n) [r]
+type MemoV n r = MemoT (n, n, n) r
+type MemoQV n r = MemoQ n r (MemoV n r Identity)
+type DynamicConext n r m = ReaderT (DynamicEnv n r) (WriterT String m)
 type DynamicConstraint n r = (Integral n, Floating r, Ord r, Show n)--, MonadReader (DynamicEnv n r) m, MonadWriter String m, MonadMemo (n, n, n) k m)
-type Dynamic n r a = ReaderT (DynamicEnv n r) (WriterT String (MemoQV n r)) a
+type Dynamic n r a = DynamicConext n r (MemoQV n r) a
+-- type Dynamic n r a = ReaderT (DynamicEnv n r) (WriterT String (MemoQV n r)) a
+
 
 makeLenses ''DynamicEnv
 
@@ -112,9 +114,9 @@ fq  :: DynamicConstraint n r
 fq _ _ 0 = return [0, 0, 0, 0]           -- Q at 0 step is 0 in all directions
 fq x y n = do
     e <- ask
-    when (e ^. logQ) (tell $ show (x, y, n) ++ "/n")
+    when (e ^. dynamicLog) (tell $ show (x, y, n) ++ "/n")
     let v = for3 memol3 fv n
-        q = fmap ((e ^. cost) (x, y) +) . uncurry v
+        q = fmap ((e ^. dynamicCost) (x, y) +) . uncurry v
         pts = neighbours (x, y)
     traverse q pts
 
@@ -135,15 +137,15 @@ fv  :: DynamicConstraint n r
     -> Dynamic n r r
 fv _ 0 0 = do
     e <- ask
-    return $ (e ^. cost) (0, 0)               -- V at (0, 0) is 0 at any atep
+    return $ (e ^. dynamicCost) (0, 0)               -- V at (0, 0) is 0 at any atep
 fv 0 x y = do
     e <- ask
-    return $ (e ^. cost) (x, y)               -- V at 0 step is a cost
+    return $ (e ^. dynamicCost) (x, y)               -- V at 0 step is a cost
 fv n x y = do
     e <- ask
-    let fv' n x y   | y' > x'       = fv n y' x'     -- function is symmetric to change x by y (due to properties of cost function)
-                    | x' > e ^. lim = return 1000000000    -- limits on the board size
-                    | otherwise     = liftM minimum $ for3 memol2 fq x' y' (n - 1)
+    let fv' n x y   | y' > x'               =  fv n y' x'     -- function is symmetric to change x by y (due to properties of cost function)
+                    | x' > e ^. dynamicLim  = return 1000000000    -- limits on the board size
+                    | otherwise             = liftM minimum $ for3 memol2 fq x' y' (n - 1)
     fv' n x y
     where x' = abs x
           y' = abs y
