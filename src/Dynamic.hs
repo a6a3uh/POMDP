@@ -82,12 +82,13 @@ dynamic0 :: DynamicConstraint n r
          -> n              -- ^ y coordinate
          -> Dynamic n r ([r], r)     -- ^ return pair (Q, V)
 dynamic0 x y = do
-    let qv' = map (qv x y) [1 ..]
-        lastUnique (x0:x1:xs) = do
-            x0' <- x0
-            x1' <- x1
-            if x0' == x1' then return x0' else lastUnique (x1:xs)
-    lastUnique qv'
+    e <- ask
+    let qvs = map (qv x y) $ if e ^. dynamicMaxSteps > 0 then [1 ..] else [1 .. e ^. dynamicMaxSteps]
+    lastUnique qvs
+        where   lastUnique (x':[]) = x'
+                lastUnique (x':xs) = do x0 <- x'
+                                        x1 <- xs !! 0
+                                        if x0 == x1 then return x0 else lastUnique xs
 
 -- | gives pair of memoized Q and V
 --
@@ -115,7 +116,7 @@ fq  :: DynamicConstraint n r
 fq _ _ 0 = return [0, 0, 0, 0]           -- Q at 0 step is 0 in all directions
 fq x y n = do
     e <- ask
-    when (e ^. dynamicLog) (tell $ show (x, y, n) ++ "/n")
+    when (e ^. dynamicLog) (tell $ show (x, y, n) ++ "; ")
     let v = for3 memol3 fv n
         q = fmap ((e ^. dynamicCost) (x, y) +) . uncurry v
         pts = neighbours (x, y)
