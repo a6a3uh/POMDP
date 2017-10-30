@@ -83,7 +83,7 @@ dynamic0 :: DynamicConstraint n r
          -> Dynamic n r ([r], r)     -- ^ return pair (Q, V)
 dynamic0 x y = do
     e <- ask
-    let qvs = map (qv x y) $ if e ^. dynamicMaxSteps > 0 then [1 ..] else [1 .. e ^. dynamicMaxSteps]
+    let qvs = map (qv x y) $ if e ^. dynamicMaxSteps == 0 then [1 ..] else [1 .. e ^. dynamicMaxSteps]
     lastUnique qvs
         where   lastUnique (x':[]) = x'
                 lastUnique (x':xs) = do x0 <- x'
