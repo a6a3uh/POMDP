@@ -33,11 +33,11 @@ import Dynamic
 -- ---True
 -- this is not ture actually
 markovOut   :: DynamicConstraint n r
-            => Pos n    -- ^ initial position
-            -> [Pos n]  -- ^ list of targets positions
+            => [Pos n]  -- ^ list of targets positions
             -> [r]      -- ^ list of probabilities (should sum to 1) for each target (lengths should be the same)
+            -> Pos n    -- ^ initial position
             -> Dynamic n r [r]    -- ^ 4 cost values for each of 4 directions
-markovOut x0 xs pr = do
+markovOut xs pr x0 = do
     costs <- mapM (liftM fst . dynamic x0) xs
     let f p cs = (p *) <$> cs
         pcosts = zipWith f pr costs
