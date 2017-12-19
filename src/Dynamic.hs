@@ -24,9 +24,9 @@ import Control.Lens
 -- >>> eval = fst . fst . startRunMemo . startRunMemoT . fmap fst . runWriterT . flip runReaderT env
 
 type Pos n = (n, n)   -- ^ position is a pair
-type Cost n r = Pos n -> r
+type CostF n r = Pos n -> r
 data DynamicEnv n r = DynamicEnv 
-    { _dynamicCost :: Cost n r
+    { _dynamicCost :: CostF n r
     , _dynamicLim :: n
     , _dynamicLog :: Bool
     , _dynamicMaxSteps :: n
@@ -152,7 +152,7 @@ fv n x y = do
           
 -- | cost function
 --
-costLogistic :: (Integral n, Floating r) => Cost n r
+costLogistic :: (Integral n, Floating r) => CostF n r
 costLogistic (x, y) = 1 / (1 + exp (-s)) -- if s < 5 then s else 5
     where s = fromIntegral $ abs x + abs y
 
